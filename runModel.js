@@ -1,59 +1,53 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
-import readlineSync from 'readline-sync' ;
+import readline from "readline";
+import { weather } from "./weatherFunc.js";
 
-const system_prompt = `
-You're an AI assitant with START, PLAN, ACTION, Observation, and Reflection capabilities.
-Wait for the user prompt and first PLAN using available tools.
-After planing use take the action with appropriate tools and wait for Observation based on Action.
-Once you get the observation, Return the AI response based on START prompt and observations.
+const tools = {
+    "weather": weather
+}
 
-Available Tools:
-function weather(city:string) : string
-weather function is available to get the weather of the city. It accepts city name as input and returns the weather of the city.
+const rl = readline.createInterface({
+  input: process.stdin,
+  output: process.stdout,
+});
 
-Example: 
-START:
-{"type": "user","user": "What's sum of weather of Delhi and Tokyo?"}
-{"type": "plan","plan": "I will call the weather for Delhi"}
-{"type": "action","function": "weather","city": "Delhi"}
-{"type": "observation","observation": "It's 100 degrees in Delhi"}
-{"type": "plan","plan": "I will call the weather details for Tokyo"}
-{"type": "action","function": "weather","city": "Tokyo"}
-{"type": "observation","observation": "It's 20 degrees in Tokyo"}
-{"type": "output","output": "The sum of weather of Delhi and Tokyo is 120 degrees"}
 
-`
-async function run(input) {
-    const genAI = new GoogleGenerativeAI("AIzaSyB9uvbtyo69OPWjRZJPvmbiez7uYRC3kqQ");
-    while (true){
-        const query = readlineSync.question('Ask me a question: ');
-   
-    try{
-          const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash"});
-          const prompt =[
-                {
-                    role: "user",
-                    parts: [{text:input}]
-                },
-                {
-                    role: "model",
-                    parts: [{text:system_prompt}]
-                }
-                
-            ]
-        const chat = model.startChat({
-                history: prompt,
-              });
-          
-          const result = await chat.sendMessage(input);
-          const response = await result.response;
-          const text = response.text();
-          return(text)
+async function interactWithUser(chat) {
+    while (true) {
+      const userMessage = await new Promise((resolve) => {
+        rl.question('You: ', resolve);
+      });
+  
+      if (userMessage.toLowerCase() === 'exit') {
+        console.log('GeminiBot: Goodbye!');
+        rl.close();
+        break;
+      }
+  
+      const result = await chat.sendMessage(userMessage);
+      const response = await result.response;
+      const text = response.text().replace(/```json|```/g, "").trim();
+      const msgs = [text];
+  
+      while (true) {
+        const newR = await chat.sendMessage(msgs);
+        msgs.push(await newR.response.text());
+        if (msgs[msgs.length - 1].includes("action")) {
+          const fn = tools[JSON.parse(msgs[msgs.length - 1].replace(/```json|```/g, "")).function];
+          fn(JSON.parse(msgs[msgs.length - 1].replace(/```json|```/g, "").trim()).city);
+          msgs.push(`{"type": "observation","observation": "It's ${fn(JSON.parse(msgs[msgs.length - 1].replace(/```json|```/g, "").trim()).city)} 
+          in ${JSON.parse(msgs[msgs.length - 1].replace(/```json|```/g, "").trim()).city}"}`);
         }
-        catch(err){
-          console.log(err)
-        }}
+        if (msgs[msgs.length - 1].includes("output")) {
+          console.log("GeminiBot:", JSON.parse(msgs[msgs.length - 1].replace(/```json|```/g, "").trim()).output);
+          break;
         }
+        if (msgs[msgs.length - 1].includes("response")) {
+          console.log("GeminiBot:", JSON.parse(msgs[msgs.length - 1].replace(/```json|```/g, "").trim()).response);
+          break;
+        }
+      }
+    
+    }
+  }
 
-       
-export default run;
+  export default interactWithUser;
