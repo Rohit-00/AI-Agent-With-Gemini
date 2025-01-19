@@ -9,7 +9,7 @@ export const weather = (city='') => {
     if(city.toLowerCase() === 'new york'){
         return '50 degrees';
     }
-    if(city.toLowerCase() === 'lahore'){
+    if(city.toLowerCase() === 'patna'){
         return '10 degrees';
     }
 }
